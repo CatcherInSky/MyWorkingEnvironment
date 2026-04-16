@@ -7,8 +7,8 @@ LazyVim-nvim 编辑器
 lazygit git管理
 
 需求
-无限日志保留
-命令行智能生成
+无限日志保留 autin
+命令行智能生成 autin 需要配置apikey?
 
 
 输入法-快捷键 中英切换+shift上屏 
@@ -21,6 +21,8 @@ npm pnpm yarn
 
 
 ## 安装工具
+pkg
+winget
 snap
 nvm 
 homebrew
