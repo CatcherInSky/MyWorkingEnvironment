@@ -76,7 +76,7 @@
 
 ## 一键安装
 ```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/dotfiles/main/install.sh)
+bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/install.sh)
 ```
 
 ## install.sh — 软件安装
@@ -96,7 +96,7 @@ bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/dotfiles/main/i
 - **其他 export 变量**：在 bash 子进程中求值（正确展开 `$HOME` 等），写入 `~/.config/fish/config.fish`
 
 ```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/dotfiles/main/migrate_to_fish.sh)
+bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/migrate_to_fish.sh)
 ```
 
 ## setup_claude.sh — Claude Code 配置
@@ -105,7 +105,7 @@ bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/dotfiles/main/m
 - 打印 claude-hud 插件安装指引
 
 ```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/dotfiles/main/setup_claude.sh)
+bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/setup_claude.sh)
 ```
 
 > claude-hud 插件需在 Claude Code 会话中手动安装：
