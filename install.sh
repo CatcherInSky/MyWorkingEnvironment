@@ -13,13 +13,20 @@ command_exists() { command -v "$1" >/dev/null 2>&1; }
 install_starship() {
   command_exists starship && return
   info "安装 Starship"
-  curl -sS https://starship.rs/install.sh | sh -s -- --yes
+  curl -sS https://starship.rs/install.sh | sh
+  
+  # 创建配置文件
+  mkdir -p "${USER_HOME}/.config"
+  [ ! -f "${USER_HOME}/.config/starship.toml" ] && \
+    curl -sS https://raw.githubusercontent.com/starship/starship/master/starship.toml -o "${USER_HOME}/.config/starship.toml"
+  info "✓ Starship 已安装，配置文件: ~/.config/starship.toml"
 }
 
 install_zoxide() {
   command_exists zoxide && return
   info "安装 zoxide"
-  curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh
+  curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+  info "✓ zoxide 已安装"
 }
 
 install_nvm() {
@@ -67,6 +74,29 @@ install_yt_dlp() {
   fi
 }
 
+install_neovim() {
+  command_exists nvim && return
+  info "配置 Neovim"
+  mkdir -p "${USER_HOME}/.config/nvim" "${USER_HOME}/.local/share/nvim"
+  info "✓ Neovim 目录已准备"
+}
+
+install_lazyvim() {
+  command_exists nvim || { warn "Neovim 未安装，无法安装 LazyVim"; return; }
+  [ -d "${USER_HOME}/.config/nvim" ] && {
+    [ "$(ls -A "${USER_HOME}/.config/nvim")" != "" ] && {
+      warn "~/.config/nvim 已存在且非空，备份到 ~/.config/nvim.bak"
+      mv "${USER_HOME}/.config/nvim" "${USER_HOME}/.config/nvim.bak" 2>/dev/null || true
+    }
+  }
+  
+  info "安装 LazyVim"
+  git clone https://github.com/LazyVim/starter "${USER_HOME}/.config/nvim" 2>/dev/null || true
+  rm -rf "${USER_HOME}/.config/nvim/.git" 2>/dev/null || true
+  info "✓ LazyVim 已安装至 ~/.config/nvim"
+  info "  首次启动 nvim 时将自动安装插件"
+}
+
 # --- Linux ---
 
 install_apt_base() {
@@ -78,18 +108,32 @@ install_apt_base() {
 install_lazygit_linux() {
   command_exists lazygit && return
   info "安装 lazygit"
+  
+  # 尝试使用官方脚本（推荐方法）
+  if curl -s https://raw.githubusercontent.com/jesseduffield/lazygit/master/scripts/install_update_linux.sh | bash 2>/dev/null; then
+    info "✓ lazygit 已安装"
+    return 0
+  fi
+  
+  # 备选方案：从 release 下载
   local arch version
   case "$(uname -m)" in
     x86_64)         arch="x86_64" ;;
     aarch64|arm64)  arch="arm64" ;;
     *) warn "未知架构，跳过 lazygit"; return ;;
   esac
+  
   version=$(curl -fsSL "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" \
     | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+  [ -z "$version" ] && { warn "无法获取 lazygit 版本，跳过"; return; }
+  
+  info "从 release 下载 lazygit v${version}"
   curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/v${version}/lazygit_${version}_Linux_${arch}.tar.gz" \
-    | tar xz -C /tmp lazygit
-  sudo install /tmp/lazygit /usr/local/bin/lazygit
+    | tar xz -C /tmp lazygit 2>/dev/null || { warn "下载失败，跳过 lazygit"; return; }
+  
+  sudo install /tmp/lazygit /usr/local/bin/lazygit 2>/dev/null || warn "无法安装 lazygit，请检查权限"
   rm -f /tmp/lazygit
+  info "✓ lazygit 已安装"
 }
 
 install_gh_linux() {
@@ -110,11 +154,16 @@ install_linux() {
   install_starship
   install_zoxide
   install_lazygit_linux
+  install_neovim
+  install_lazyvim
   install_nvm
   install_zvm
   install_pipx
   install_yt_dlp
   install_npm_globals
+  
+  info ""
+  info "✓ Linux 安装完成"
 }
 
 # --- macOS ---
@@ -128,7 +177,7 @@ install_brew_if_missing() {
 
 install_macos() {
   install_brew_if_missing
-  local formulas=(git fish starship zoxide lazygit python node pnpm yarn pipx rustup gh ffmpeg yt-dlp)
+  local formulas=(git fish starship zoxide lazygit neovim python node pnpm yarn pipx rustup gh ffmpeg yt-dlp)
   # docker via cask = Docker Desktop (includes CLI); ghostty is the terminal emulator
   local casks=(ghostty docker copyq snipaste macs-fan-control scroll-reverser stats keyclu kap)
 
@@ -141,9 +190,16 @@ install_macos() {
     brew install --cask "$pkg" 2>/dev/null || warn "brew cask 无法安装 $pkg，跳过"
   done
 
+  install_starship
+  install_zoxide
+  install_neovim
+  install_lazyvim
   install_nvm
   install_zvm
   install_npm_globals
+  
+  info ""
+  info "✓ macOS 安装完成"
 }
 
 # --- Windows ---
