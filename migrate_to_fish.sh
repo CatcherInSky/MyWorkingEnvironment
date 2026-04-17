@@ -84,7 +84,12 @@ migrate_path() {
   base_path=$(env -i HOME="$HOME" "$shell_to_use" --norc -c 'echo "$PATH"' 2>/dev/null)
   full_path=$(env -i HOME="$HOME" "$shell_to_use" --norc -c "${src} echo \"\$PATH\"" 2>/dev/null)
 
+  [ -z "$full_path" ] && { info "  未获取到 PATH，跳过"; return; }
+  
+  local full_parts=()
   IFS=':' read -ra full_parts <<< "$full_path"
+  [ ${#full_parts[@]} -eq 0 ] && { info "  未发现新的 PATH 条目"; return; }
+  
   for p in "${full_parts[@]}"; do
     [[ -z "$p" || ":${base_path}:" == *":${p}:"* ]] && continue
     [ -d "$p" ] || { info "  跳过（目录不存在）: $p"; continue; }
@@ -165,9 +170,15 @@ set_default_shell() {
     return 0
   fi
   
+  # First, ensure fish is in /etc/shells
+  if ! grep -q "^${fish_path}$" /etc/shells 2>/dev/null; then
+    info "添加 $fish_path 到 /etc/shells"
+    echo "$fish_path" | sudo tee -a /etc/shells >/dev/null 2>&1 || warn "无法添加 fish 到 /etc/shells，可能需要手动操作"
+  fi
+  
   # Try to change the default shell using chsh
   if command -v chsh >/dev/null 2>&1; then
-    echo "$fish_path" | chsh -s "$fish_path" 2>/dev/null \
+    chsh -s "$fish_path" 2>/dev/null \
       && info "✓ 默认 shell 已设置为: $fish_path" \
       || { warn "无法使用 chsh 修改默认 shell，请手动运行: chsh -s $fish_path"; return 1; }
   else
