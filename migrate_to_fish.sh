@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
-# Migrates PATH entries and exported variables from bash configs to fish.
+# Migrates PATH entries and exported variables from bash/zsh configs to fish.
 #
 # Strategy:
-#   - PATH:        compare clean-bash PATH vs sourced-bash PATH; add new entries
+#   - PATH:        compare clean-shell PATH vs sourced-shell PATH; add new entries
 #                  via fish_add_path (idempotent, writes to $fish_user_paths)
 #   - Other vars:  extract names from explicit `export` lines, evaluate their
-#                  actual expanded values in a bash subprocess, write set -gx
+#                  actual expanded values in a bash/zsh subprocess, write set -gx
 #                  to config.fish (skips vars already present)
+#   - Default shell: change default login shell to fish via chsh
 
 set -uo pipefail
 
 FISH_CONFIG="${HOME}/.config/fish/config.fish"
 RC_FILES=()
-for f in "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile"; do
+
+# Collect config files from multiple shells: bash, zsh, and others
+for f in \
+  "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile" \
+  "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zshenv" \
+  "$HOME/.config/bash/bashrc"; do
   [ -f "$f" ] && RC_FILES+=("$f")
 done
 
@@ -28,6 +34,7 @@ SKIP_VARS=(
 
 info()  { printf "[INFO] %s\n" "$1"; }
 warn()  { printf "[WARN] %s\n" "$1"; }
+error_exit() { printf "[ERROR] %s\n" "$1" >&2; exit 1; }
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 is_skip_var() {
@@ -39,13 +46,22 @@ is_skip_var() {
   return 1
 }
 
-# Build `source FILE; source FILE; ...` string for bash -c
+# Build `source FILE; source FILE; ...` string for bash/zsh -c
 build_source_cmd() {
   local src=""
   for f in "${RC_FILES[@]}"; do
     src+="source '$f' 2>/dev/null || true; "
   done
   echo "$src"
+}
+
+# Detect which shell to use for sourcing (prefer zsh if available, fallback to bash)
+detect_shell_for_sourcing() {
+  if command -v zsh >/dev/null 2>&1; then
+    echo "zsh"
+  else
+    echo "bash"
+  fi
 }
 
 # Single-quote a value for fish: replace ' with '\''
@@ -56,12 +72,17 @@ fish_single_quote() {
 
 migrate_path() {
   info "迁移 PATH 条目"
+  
+  [ ${#RC_FILES[@]} -eq 0 ] && { info "  未找到任何配置文件，跳过"; return; }
+  
+  local shell_to_use
+  shell_to_use=$(detect_shell_for_sourcing)
   local src
   src=$(build_source_cmd)
 
   local base_path full_path
-  base_path=$(env -i HOME="$HOME" bash --norc -c 'echo "$PATH"' 2>/dev/null)
-  full_path=$(env -i HOME="$HOME" bash --norc -c "${src} echo \"\$PATH\"" 2>/dev/null)
+  base_path=$(env -i HOME="$HOME" "$shell_to_use" --norc -c 'echo "$PATH"' 2>/dev/null)
+  full_path=$(env -i HOME="$HOME" "$shell_to_use" --norc -c "${src} echo \"\$PATH\"" 2>/dev/null)
 
   IFS=':' read -ra full_parts <<< "$full_path"
   for p in "${full_parts[@]}"; do
@@ -78,6 +99,10 @@ migrate_env_vars() {
   mkdir -p "$(dirname "$FISH_CONFIG")"
   touch "$FISH_CONFIG"
 
+  [ ${#RC_FILES[@]} -eq 0 ] && { info "  未找到任何配置文件，跳过"; return; }
+
+  local shell_to_use
+  shell_to_use=$(detect_shell_for_sourcing)
   local src
   src=$(build_source_cmd)
 
@@ -103,9 +128,9 @@ migrate_env_vars() {
   for var in "${unique_vars[@]}"; do
     [ "$var" = "PATH" ] && continue  # handled by migrate_path
 
-    # Get expanded value by sourcing rc files in bash subprocess
+    # Get expanded value by sourcing rc files in the detected shell subprocess
     local value
-    value=$(env -i HOME="$HOME" bash --norc -c "${src} printf '%s' \"\${${var}:-}\"" 2>/dev/null) || continue
+    value=$(env -i HOME="$HOME" "$shell_to_use" --norc -c "${src} printf '%s' \"\${${var}:-}\"" 2>/dev/null) || continue
     [ -z "$value" ] && continue
 
     local fish_line="set -gx ${var} $(fish_single_quote "$value")"
@@ -121,18 +146,70 @@ migrate_env_vars() {
   done
 }
 
-main() {
-  command_exists fish || { warn "fish 未安装，请先安装 fish shell"; exit 1; }
-
-  if [ ${#RC_FILES[@]} -eq 0 ]; then
-    warn "未找到 bash 配置文件（~/.bashrc, ~/.bash_profile, ~/.profile）"
-    exit 1
+set_default_shell() {
+  info "设置默认 shell 为 fish"
+  
+  local fish_path
+  fish_path=$(command -v fish)
+  
+  if [ -z "$fish_path" ]; then
+    warn "fish 命令未找到，无法设置默认 shell"
+    return 1
   fi
+  
+  local current_shell
+  current_shell=$(dscl . -read /Users/"$USER" UserShell 2>/dev/null | awk '{print $2}' || echo "$SHELL")
+  
+  if [ "$current_shell" == "$fish_path" ]; then
+    info "默认 shell 已是 fish，无需修改"
+    return 0
+  fi
+  
+  # Try to change the default shell using chsh
+  if command -v chsh >/dev/null 2>&1; then
+    echo "$fish_path" | chsh -s "$fish_path" 2>/dev/null \
+      && info "✓ 默认 shell 已设置为: $fish_path" \
+      || { warn "无法使用 chsh 修改默认 shell，请手动运行: chsh -s $fish_path"; return 1; }
+  else
+    warn "chsh 命令未找到，无法修改默认 shell"
+    return 1
+  fi
+}
 
-  info "从以下文件迁移：${RC_FILES[*]}"
-  migrate_path
-  migrate_env_vars
-  info "迁移完成。请重启终端或运行 exec fish 使更改生效。"
+main() {
+  command_exists fish || { error_exit "fish 未安装，请先安装 fish shell"; }
+
+  info "====== 开始迁移至 Fish Shell ======"
+  info ""
+  
+  # If we have config files, migrate them
+  if [ ${#RC_FILES[@]} -gt 0 ]; then
+    info "发现配置文件：${RC_FILES[*]}"
+    info "开始迁移..."
+    info ""
+    migrate_path
+    info ""
+    migrate_env_vars
+    info ""
+  else
+    info "未找到 bash/zsh 配置文件"
+    info "如需手动配置，请："
+    info "  1. 在 fish 中运行: fish_add_path /your/custom/path"
+    info "  2. 或在 ~/.config/fish/config.fish 中添加: set -gx VAR_NAME value"
+    info ""
+    mkdir -p "$(dirname "$FISH_CONFIG")"
+    touch "$FISH_CONFIG"
+    info "✓ fish 配置文件已创建: $FISH_CONFIG"
+    info ""
+  fi
+  
+  # Set fish as default shell
+  set_default_shell
+  info ""
+  
+  info "====== 迁移完成 ======"
+  info "下次打开终端将自动使用 fish shell"
+  info "手动切换到 fish，请运行: exec fish"
   info "如需撤销某个变量，在 fish 中运行: set -e VAR_NAME"
 }
 
