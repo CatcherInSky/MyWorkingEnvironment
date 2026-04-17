@@ -187,6 +187,24 @@ set_default_shell() {
   fi
 }
 
+init_zoxide_for_fish() {
+  command_exists zoxide || return 0
+  
+  grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  
+  printf '\n# Zoxide initialization\nzoxide init fish | source\nalias cd z\n' >> "$FISH_CONFIG"
+  info "  ✓ zoxide 已配置"
+}
+
+init_atuin_for_fish() {
+  command_exists atuin || return 0
+  
+  grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  
+  printf '\n# Atuin initialization (command history)\natuin init fish | source\n' >> "$FISH_CONFIG"
+  info "  ✓ atuin 已配置（可选：运行 atuin account register 启用云同步）"
+}
+
 main() {
   command_exists fish || { error_exit "fish 未安装，请先安装 fish shell"; }
 
@@ -213,6 +231,12 @@ main() {
     info "✓ fish 配置文件已创建: $FISH_CONFIG"
     info ""
   fi
+  
+  # Initialize terminal tools for fish
+  info "配置终端工具集成"
+  init_zoxide_for_fish
+  init_atuin_for_fish
+  info ""
   
   # Set fish as default shell
   set_default_shell

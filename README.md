@@ -39,7 +39,7 @@
 | LazyVim | Neovim 配置 | Linux / macOS | 适合终端编辑 |
 | lazygit | Git 管理 | Linux / macOS | TUI Git 工具 |
 | atuin | 命令历史增强 | Linux / macOS | 无限日志保留，需配置 APIKey |
-
+| yazi | | Linux / macOS |  |
 ## 包与环境工具
 | 软件名称 | 作用 | 运行环境 | 备注 |
 | --- | --- | --- | --- |

@@ -29,6 +29,86 @@ install_zoxide() {
   info "✓ zoxide 已安装"
 }
 
+init_zoxide_for_fish() {
+  command_exists fish || return 0
+  command_exists zoxide || return 0
+  
+  local FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
+  mkdir -p "$(dirname "$FISH_CONFIG")"
+  touch "$FISH_CONFIG"
+  
+  # 检查是否已配置
+  grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  
+  printf '\n# Zoxide initialization\nzoxide init fish | source\nalias cd z\n' >> "$FISH_CONFIG"
+  info "✓ zoxide 已配置到 fish"
+}
+
+install_yazi() {
+  command_exists yazi && return
+  info "安装 yazi"
+  
+  case "$(uname -m)" in
+    x86_64)         arch="x86_64" ;;
+    aarch64|arm64)  arch="aarch64" ;;
+    *) warn "未知架构，跳过 yazi"; return ;;
+  esac
+  
+  local version
+  version=$(curl -fsSL "https://api.github.com/repos/sxyazi/yazi/releases/latest" \
+    | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+  [ -z "$version" ] && { warn "无法获取 yazi 版本，跳过"; return; }
+  
+  local os_name
+  case "$(uname -s)" in
+    Linux)  os_name="linux" ;;
+    Darwin) os_name="macos" ;;
+    *)  warn "不支持的操作系统，跳过 yazi"; return ;;
+  esac
+  
+  info "从 release 下载 yazi v${version}"
+  curl -fsSL "https://github.com/sxyazi/yazi/releases/download/v${version}/yazi-${arch}-unknown-${os_name}.zip" \
+    -o /tmp/yazi.zip 2>/dev/null || { warn "下载失败，跳过 yazi"; return; }
+  
+  unzip -o /tmp/yazi.zip -d /tmp 2>/dev/null || { warn "解压失败，跳过 yazi"; rm -f /tmp/yazi.zip; return; }
+  
+  if [ -f "/tmp/yazi" ]; then
+    mkdir -p "${USER_HOME}/.local/bin"
+    mv /tmp/yazi "${USER_HOME}/.local/bin/yazi"
+    chmod +x "${USER_HOME}/.local/bin/yazi"
+    info "✓ yazi 已安装"
+  else
+    warn "无法找到 yazi 可执行文件，跳过"
+  fi
+  
+  rm -f /tmp/yazi.zip /tmp/yazi-${arch}-unknown-${os_name} 2>/dev/null
+}
+
+install_atuin() {
+  command_exists atuin && return
+  info "安装 atuin"
+  
+  curl -fsSL https://setup.atuin.sh | bash || { warn "atuin 安装失败，跳过"; return; }
+  
+  info "✓ atuin 已安装"
+}
+
+init_atuin_for_fish() {
+  command_exists fish || return 0
+  command_exists atuin || return 0
+  
+  local FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
+  mkdir -p "$(dirname "$FISH_CONFIG")"
+  touch "$FISH_CONFIG"
+  
+  # 检查是否已配置
+  grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  
+  printf '\n# Atuin initialization\natuin init fish | source\n' >> "$FISH_CONFIG"
+  info "✓ atuin 已配置到 fish"
+  info "  提示：运行 'atuin account register' 或 'atuin account login' 来启用云同步"
+}
+
 install_nvm() {
   [ -d "${USER_HOME}/.nvm" ] && return
   info "安装 nvm"
@@ -153,7 +233,11 @@ install_linux() {
   install_gh_linux
   install_starship
   install_zoxide
+  init_zoxide_for_fish
   install_lazygit_linux
+  install_yazi
+  install_atuin
+  init_atuin_for_fish
   install_neovim
   install_lazyvim
   install_nvm
@@ -177,7 +261,7 @@ install_brew_if_missing() {
 
 install_macos() {
   install_brew_if_missing
-  local formulas=(git fish starship zoxide lazygit neovim python node pnpm yarn pipx rustup gh ffmpeg yt-dlp)
+  local formulas=(git fish starship zoxide lazygit neovim python node pnpm yarn pipx rustup gh ffmpeg yt-dlp atuin yazi)
   # docker via cask = Docker Desktop (includes CLI); ghostty is the terminal emulator
   local casks=(ghostty docker copyq snipaste macs-fan-control scroll-reverser stats keyclu kap)
 
@@ -192,6 +276,8 @@ install_macos() {
 
   install_starship
   install_zoxide
+  init_zoxide_for_fish
+  init_atuin_for_fish
   install_neovim
   install_lazyvim
   install_nvm
