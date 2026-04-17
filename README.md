@@ -74,13 +74,30 @@
 
 # 脚本
 
-## 一键安装
+## 执行流程 ⚠️
+正确的执行顺序很重要。**所有脚本都应在 bash 中执行**：
+
 ```bash
+# 步骤 1️⃣ 在 bash 中安装所有软件和初始化 fish 配置
 bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/install.sh)
+
+# 步骤 2️⃣ 在 bash 中迁移环境变量到 fish
+bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/migrate_to_fish.sh)
+
+# 步骤 3️⃣ 切换到 fish shell
+exec fish
+
+# 步骤 4️⃣ （可选）配置 Claude Code
+bash setup_claude.sh
 ```
 
-## install.sh — 软件安装
-自动检测运行环境（Windows / WSL / Linux / macOS），安装对应平台的软件。
+## install.sh — 软件安装和初始化
+自动检测运行环境（Windows / WSL / Linux / macOS），安装对应平台的软件和工具。
+
+**负责内容**：
+- ✅ 安装所有必需的软件包（git、fish、neovim 等）
+- ✅ 初始化 fish 配置：zoxide、atuin、lazyvim 等
+- ✅ 安装开发工具链（Rust、Node、Python 等）
 
 | 环境 | 行为 |
 | --- | --- |
@@ -88,16 +105,26 @@ bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnviro
 | macOS | Homebrew 安装所有 formulas 和 casks（含 Docker Desktop、ghostty） |
 | Windows | winget 批量安装 |
 
-无法通过包管理器安装的工具（starship、zoxide、lazygit）均走各自官方 `curl | sh` 安装脚本，避免 apt 版本过旧或缺包问题。
+**故障排查**：
+- 运行失败后可重复执行（幂等）
+- 如果 zoxide/lazyvim 未配置，检查 `~/.config/fish/config.fish` 是否包含相关配置
 
-## migrate_to_fish.sh — fish 环境变量迁移
-将 `~/.bashrc` / `~/.bash_profile` / `~/.profile` 中的环境变量迁移到 fish：
+## migrate_to_fish.sh — 环境变量迁移和验证
+从 bash/zsh 迁移现有环境变量到 fish，并验证工具配置。
+
+**负责内容**：
+- ✅ 将 `~/.bashrc` / `~/.bash_profile` / `~/.profile` 中的 PATH 条目迁移到 fish
+- ✅ 迁移自定义 export 变量
+- ✅ 验证 zoxide、atuin 等工具是否已配置
+- ✅ 设置 fish 为默认 shell
+
+**工作原理**：
 - **PATH 条目**：通过 `fish_add_path` 添加（幂等，不重复）
 - **其他 export 变量**：在 bash 子进程中求值（正确展开 `$HOME` 等），写入 `~/.config/fish/config.fish`
 
-```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/migrate_to_fish.sh)
-```
+**故障排查**：
+- 如果某些工具（如 zoxide）配置仍然缺失，运行此脚本可以补充
+- 检查输出中的 ✓ 标记，确保所有工具已正确配置
 
 ## setup_claude.sh — Claude Code 配置
 - 将 `notify.sh` 复制到 `~/.claude/` 并设为可执行

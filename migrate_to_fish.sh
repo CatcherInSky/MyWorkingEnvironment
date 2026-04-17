@@ -190,19 +190,28 @@ set_default_shell() {
 init_zoxide_for_fish() {
   command_exists zoxide || return 0
   
-  grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  if grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null; then
+    info "✓ zoxide 已配置"
+    return 0
+  fi
+  
+  local FISH_COMPLETIONS="${HOME}/.config/fish/completions"
+  mkdir -p "$FISH_COMPLETIONS"
   
   printf '\n# Zoxide initialization\nzoxide init fish | source\nalias cd z\n' >> "$FISH_CONFIG"
-  info "  ✓ zoxide 已配置"
+  info "✓ zoxide 已配置"
 }
 
 init_atuin_for_fish() {
   command_exists atuin || return 0
   
-  grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  if grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null; then
+    info "✓ atuin 已配置"
+    return 0
+  fi
   
-  printf '\n# Atuin initialization (command history)\natuin init fish | source\n' >> "$FISH_CONFIG"
-  info "  ✓ atuin 已配置（可选：运行 atuin account register 启用云同步）"
+  printf '\n# Atuin initialization\natuin init fish | source\n' >> "$FISH_CONFIG"
+  info "✓ atuin 已配置"
 }
 
 main() {
@@ -233,9 +242,18 @@ main() {
   fi
   
   # Initialize terminal tools for fish
-  info "配置终端工具集成"
-  init_zoxide_for_fish
-  init_atuin_for_fish
+  info "验证终端工具配置"
+  if command_exists zoxide; then
+    init_zoxide_for_fish || warn "zoxide 配置失败"
+  else
+    warn "zoxide 未安装，若需要请先运行 install.sh"
+  fi
+  
+  if command_exists atuin; then
+    init_atuin_for_fish || warn "atuin 配置失败"
+  else
+    warn "atuin 未安装（可选工具）"
+  fi
   info ""
   
   # Set fish as default shell
@@ -243,9 +261,13 @@ main() {
   info ""
   
   info "====== 迁移完成 ======"
-  info "下次打开终端将自动使用 fish shell"
-  info "手动切换到 fish，请运行: exec fish"
-  info "如需撤销某个变量，在 fish 中运行: set -e VAR_NAME"
-}
+  info ""
+  info "✓ fish 已配置完成"
+  info ""
+  info "下一步操作："
+  info "  1. 切换 shell：exec fish"
+  info "  2. 验证配置：cd / && z / && nvim"
+  info "  3. 如需撤销变量，运行：set -e VAR_NAME"
+  info ""
 
 main "$@"

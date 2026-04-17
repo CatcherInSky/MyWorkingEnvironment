@@ -30,15 +30,20 @@ install_zoxide() {
 }
 
 init_zoxide_for_fish() {
-  command_exists fish || return 0
-  command_exists zoxide || return 0
+  command_exists fish || { info "  fish 未安装，跳过 zoxide fish 配置"; return 0; }
+  command_exists zoxide || { info "  zoxide 未安装，跳过"; return 0; }
   
   local FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
-  mkdir -p "$(dirname "$FISH_CONFIG")"
+  local FISH_COMPLETIONS="${USER_HOME}/.config/fish/completions"
+  
+  mkdir -p "$(dirname "$FISH_CONFIG")" "$FISH_COMPLETIONS"
   touch "$FISH_CONFIG"
   
   # 检查是否已配置
-  grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  if grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null; then
+    info "✓ zoxide 已配置到 fish（跳过）"
+    return 0
+  fi
   
   printf '\n# Zoxide initialization\nzoxide init fish | source\nalias cd z\n' >> "$FISH_CONFIG"
   info "✓ zoxide 已配置到 fish"
@@ -94,15 +99,19 @@ install_atuin() {
 }
 
 init_atuin_for_fish() {
-  command_exists fish || return 0
-  command_exists atuin || return 0
+  command_exists fish || { info "  fish 未安装，跳过 atuin fish 配置"; return 0; }
+  command_exists atuin || { info "  atuin 未安装，跳过"; return 0; }
   
   local FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
+  
   mkdir -p "$(dirname "$FISH_CONFIG")"
   touch "$FISH_CONFIG"
   
   # 检查是否已配置
-  grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null && return 0
+  if grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null; then
+    info "✓ atuin 已配置到 fish（跳过）"
+    return 0
+  fi
   
   printf '\n# Atuin initialization\natuin init fish | source\n' >> "$FISH_CONFIG"
   info "✓ atuin 已配置到 fish"
@@ -177,6 +186,34 @@ install_lazyvim() {
   info "  首次启动 nvim 时将自动安装插件"
 }
 
+init_lazyvim_for_fish() {
+  command_exists fish || { info "  fish 未安装，跳过 Neovim 补全"; return 0; }
+  command_exists nvim || { info "  nvim 未安装，跳过 Neovim 补全"; return 0; }
+  
+  local FISH_COMPLETIONS="${USER_HOME}/.config/fish/completions"
+  mkdir -p "$FISH_COMPLETIONS"
+  
+  # 检查补全文件是否已存在
+  if [ -f "$FISH_COMPLETIONS/nvim.fish" ]; then
+    info "✓ Neovim 补全已存在（跳过）"
+    return 0
+  fi
+  
+  cat > "$FISH_COMPLETIONS/nvim.fish" << 'EOF'
+# Neovim completions for fish
+complete -c nvim -n "__fish_use_subcommand_from_list" -s c -l command -d "Execute command"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s d -l diff -d "Diff mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s e -l ex -d "Ex mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s E -d "Ex mode (no plugins)"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s h -l help -d "Show help"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s v -l version -d "Show version"
+complete -c nvim -f
+EOF
+  
+  info "✓ Neovim 补全已生成至: $FISH_COMPLETIONS/nvim.fish"
+  info "  首次启动 nvim 时 LazyVim 将自动下载和配置插件"
+}
+
 # --- Linux ---
 
 install_apt_base() {
@@ -240,6 +277,7 @@ install_linux() {
   init_atuin_for_fish
   install_neovim
   install_lazyvim
+  init_lazyvim_for_fish
   install_nvm
   install_zvm
   install_pipx
@@ -280,6 +318,7 @@ install_macos() {
   init_atuin_for_fish
   install_neovim
   install_lazyvim
+  init_lazyvim_for_fish
   install_nvm
   install_zvm
   install_npm_globals
