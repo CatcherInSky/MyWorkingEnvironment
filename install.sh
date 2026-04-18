@@ -172,18 +172,28 @@ install_neovim() {
 
 install_lazyvim() {
   command_exists nvim || { warn "Neovim 未安装，无法安装 LazyVim"; return; }
-  [ -d "${USER_HOME}/.config/nvim" ] && {
-    [ "$(ls -A "${USER_HOME}/.config/nvim")" != "" ] && {
+
+  if [ -d "${USER_HOME}/.config/nvim" ]; then
+    if [ "$(ls -A "${USER_HOME}/.config/nvim")" != "" ]; then
       warn "~/.config/nvim 已存在且非空，备份到 ~/.config/nvim.bak"
-      mv "${USER_HOME}/.config/nvim" "${USER_HOME}/.config/nvim.bak" 2>/dev/null || true
-    }
-  }
-  
+      if mv "${USER_HOME}/.config/nvim" "${USER_HOME}/.config/nvim.bak" 2>/dev/null; then
+        info "  旧配置已备份"
+      else
+        warn "备份失败，尝试移除旧目录以继续安装"
+        rm -rf "${USER_HOME}/.config/nvim"
+      fi
+    fi
+  fi
+
+  mkdir -p "${USER_HOME}/.config"
   info "安装 LazyVim"
-  git clone https://github.com/LazyVim/starter "${USER_HOME}/.config/nvim" 2>/dev/null || true
-  rm -rf "${USER_HOME}/.config/nvim/.git" 2>/dev/null || true
-  info "✓ LazyVim 已安装至 ~/.config/nvim"
-  info "  首次启动 nvim 时将自动安装插件"
+  if git clone https://github.com/LazyVim/starter "${USER_HOME}/.config/nvim" 2>/dev/null; then
+    rm -rf "${USER_HOME}/.config/nvim/.git" 2>/dev/null || true
+    info "✓ LazyVim 已安装至 ~/.config/nvim"
+    info "  首次启动 nvim 时将自动下载和配置插件"
+  else
+    warn "LazyVim 安装失败，检查网络或权限"
+  fi
 }
 
 init_lazyvim_for_fish() {
