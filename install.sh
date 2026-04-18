@@ -315,11 +315,27 @@ install_macos() {
 
   info "安装 Homebrew formulas"
   for pkg in "${formulas[@]}"; do
-    brew install "$pkg" 2>/dev/null || warn "brew 无法安装 $pkg，跳过"
+    pkg="${pkg:-}"
+    if [ -z "$pkg" ]; then
+      warn "brew formula 名称为空，跳过"
+      continue
+    fi
+
+    if ! brew install "$pkg" >/dev/null 2>&1; then
+      warn "brew 无法安装 $pkg，跳过"
+    fi
   done
   info "安装 Homebrew casks"
   for pkg in "${casks[@]}"; do
-    brew install --cask "$pkg" 2>/dev/null || warn "brew cask 无法安装 $pkg，跳过"
+    pkg="${pkg:-}"
+    if [ -z "$pkg" ]; then
+      warn "brew cask 名称为空，跳过"
+      continue
+    fi
+
+    if ! brew install --cask "$pkg" >/dev/null 2>&1; then
+      warn "brew cask 无法安装 $pkg，跳过"
+    fi
   done
 
   install_starship
