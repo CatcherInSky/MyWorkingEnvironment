@@ -170,6 +170,14 @@ set_default_shell() {
     return 0
   fi
   
+  # 在容器环境中跳过设置默认shell
+  if [ -n "${CODESPACES:-}" ] || [ -n "${GITHUB_CODESPACE_TOKEN:-}" ] || [ -f /.dockerenv ]; then
+    info "检测到容器环境，跳过设置默认 shell"
+    info "请手动运行: chsh -s $fish_path"
+    info "或在下次登录时使用: exec fish"
+    return 0
+  fi
+  
   # First, ensure fish is in /etc/shells
   if ! grep -q "^${fish_path}$" /etc/shells 2>/dev/null; then
     info "添加 $fish_path 到 /etc/shells"
@@ -178,9 +186,13 @@ set_default_shell() {
   
   # Try to change the default shell using chsh
   if command -v chsh >/dev/null 2>&1; then
-    chsh -s "$fish_path" 2>/dev/null \
-      && info "✓ 默认 shell 已设置为: $fish_path" \
-      || { warn "无法使用 chsh 修改默认 shell，请手动运行: chsh -s $fish_path"; return 1; }
+    if chsh -s "$fish_path" 2>/dev/null; then
+      info "✓ 默认 shell 已设置为: $fish_path"
+    else
+      warn "无法使用 chsh 修改默认 shell，请手动运行: chsh -s $fish_path"
+      warn "或者在下次登录时使用: exec fish"
+      return 1
+    fi
   else
     warn "chsh 命令未找到，无法修改默认 shell"
     return 1
@@ -199,7 +211,12 @@ init_zoxide_for_fish() {
   mkdir -p "$FISH_COMPLETIONS"
   
   printf '\n# Zoxide initialization\nzoxide init fish | source\nalias cd z\n' >> "$FISH_CONFIG"
+  
+  # 生成 zoxide 补全文件
+  zoxide init fish | grep -A 1000 "# ================" > "$FISH_COMPLETIONS/zoxide.fish" 2>/dev/null || true
+  
   info "✓ zoxide 已配置"
+  info "  补全文件已生成至: $FISH_COMPLETIONS/zoxide.fish"
 }
 
 init_atuin_for_fish() {
@@ -212,6 +229,58 @@ init_atuin_for_fish() {
   
   printf '\n# Atuin initialization\natuin init fish | source\n' >> "$FISH_CONFIG"
   info "✓ atuin 已配置"
+}
+
+init_lazyvim_for_fish() {
+  command_exists fish || return 0
+  command_exists nvim || return 0
+  
+  local FISH_COMPLETIONS="${HOME}/.config/fish/completions"
+  mkdir -p "$FISH_COMPLETIONS"
+  
+  # 检查补全文件是否已存在
+  [ -f "$FISH_COMPLETIONS/nvim.fish" ] && return 0
+  
+  # 为 nvim 生成 fish 补全
+  cat > "$FISH_COMPLETIONS/nvim.fish" << 'EOF'
+# Neovim completions for fish
+
+complete -c nvim -n "__fish_use_subcommand_from_list" -s c -l command -d "Execute command"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s d -l diff -d "Diff mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s e -l ex -d "Ex mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s E -d "Ex mode (no plugins)"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s h -l help -d "Show help"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s i -l insert -d "Insert mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s l -l lisp -d "Lisp mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s m -d "Modula-2 mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s M -d "Binary mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s N -d "No swap file (recovery disabled)"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s o -d "Open files in split"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s O -d "Open files in vertical split"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s p -d "Open files as tabs"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s P -d "Run binary as pipe"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s q -l quit -d "Quit (exit code)"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s r -d "Recover swap file"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s R -d "Readonly mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s s -d "Source file before editing"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s S -d "Skip plugins (no plugins)"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s t -l tag -d "Jump to tag"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s T -d "Terminal mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s u -d "Use init file"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s U -d "Don't use init file"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s v -l version -d "Show version"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s w -d "Write all and exit"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s W -d "Write and exit all"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s x -d "Edit encrypted file"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s y -d "Easy mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s z -d "Restricted mode"
+complete -c nvim -n "__fish_use_subcommand_from_list" -s Z -d "Vim mode (restricted)"
+
+# File completion
+complete -c nvim -f
+EOF
+  
+  info "✓ Neovim 补全已生成至: $FISH_COMPLETIONS/nvim.fish"
 }
 
 main() {
@@ -254,6 +323,12 @@ main() {
   else
     warn "atuin 未安装（可选工具）"
   fi
+  
+  if command_exists nvim; then
+    init_lazyvim_for_fish || warn "Neovim 补全配置失败"
+  else
+    warn "Neovim 未安装，若需要请先运行 install.sh"
+  fi
   info ""
   
   # Set fish as default shell
@@ -269,5 +344,6 @@ main() {
   info "  2. 验证配置：cd / && z / && nvim"
   info "  3. 如需撤销变量，运行：set -e VAR_NAME"
   info ""
+}
 
 main "$@"
