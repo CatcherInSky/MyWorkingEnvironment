@@ -172,6 +172,19 @@ install_neovim() {
 
 install_lazyvim() {
   command_exists nvim || { warn "Neovim 未安装，无法安装 LazyVim"; return; }
+  if ! command_exists git; then
+    warn "git 未安装，尝试通过 Homebrew 安装 git"
+    if command_exists brew; then
+      if ! brew install git >/dev/null 2>&1; then
+        warn "git 安装失败，无法继续安装 LazyVim"
+        return
+      fi
+      eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null || true)"
+    else
+      warn "brew 未安装，无法安装 git"
+      return
+    fi
+  fi
 
   if [ -d "${USER_HOME}/.config/nvim" ]; then
     if [ "$(ls -A "${USER_HOME}/.config/nvim")" != "" ]; then
@@ -187,13 +200,16 @@ install_lazyvim() {
 
   mkdir -p "${USER_HOME}/.config"
   info "安装 LazyVim"
-  if git clone https://github.com/LazyVim/starter "${USER_HOME}/.config/nvim" 2>/dev/null; then
-    rm -rf "${USER_HOME}/.config/nvim/.git" 2>/dev/null || true
-    info "✓ LazyVim 已安装至 ~/.config/nvim"
-    info "  首次启动 nvim 时将自动下载和配置插件"
-  else
+  local clone_err
+  if ! clone_err=$(git clone --depth 1 https://github.com/LazyVim/starter "${USER_HOME}/.config/nvim" 2>&1); then
     warn "LazyVim 安装失败，检查网络或权限"
+    warn "$clone_err"
+    return
   fi
+
+  rm -rf "${USER_HOME}/.config/nvim/.git" 2>/dev/null || true
+  info "✓ LazyVim 已安装至 ~/.config/nvim"
+  info "  首次启动 nvim 时将自动下载和配置插件"
 }
 
 init_lazyvim_for_fish() {
