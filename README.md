@@ -40,9 +40,12 @@
 | lazygit | Git 管理 | Linux / macOS | TUI Git 工具 |
 | atuin | 命令历史增强 | Linux / macOS | 无限日志保留，需配置 APIKey |
 | yazi | | Linux / macOS |  |
+| fd | | |
+
 ## 包与环境工具
 | 软件名称 | 作用 | 运行环境 | 备注 |
 | --- | --- | --- | --- |
+|lua | | | |
 | Python | 运行时 | 通用 | 环境变量管理必备 |
 | zig | 运行时 | 通用 | 编译器 / 工具链 |
 | rust | 运行时 | 通用 | 编译与开发 |
@@ -155,3 +158,139 @@ bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnviro
 
 # 测试 (暂不考虑)
 - 怎么看浏览器？
+
+# 没写进脚本的其他操作
+
+
+ya pkg add yazi-rs/plugins:smart-enter
+ya pkg add yazi-rs/plugins:git
+ya pkg add yazi-rs/plugins:full-border
+ya pkg add yazi-rs/plugins:chmod
+ya pkg add Reledia/glow
+ya pkg add yazi-rs/plugins:piper
+ya pkg add boydaihungst/mediainfo
+ya pkg add Sonico98/exifaudio
+ya pkg add wylie102/duckdb
+
+
+~/.config/yazi/init.lua
+---@diagnostic disable: undefined-global
+require("git"):setup({ order = 1500 })
+require("full-border"):setup()
+if THEME and THEME.status then
+	local th = THEME.status
+	th.git = th.git or {}
+	th.git.unknown_sign = " "
+	th.git.modified_sign = "M"
+	th.git.deleted_sign = "D"
+	th.git.clean_sign = "✔"
+end
+
+~/.config/yazi/yazi.toml
+[mgr]
+show_hidden = true
+show_symlink = true
+linemode = "size"
+sort_by = "natural"
+sort_dir_first = true
+show_git = true
+[opener]
+edit = [
+  { run = 'nvim "$@"', block = true, desc = "Neovim" },
+]
+[open]
+prepend_rules = [
+  { name = "*", use = "edit" },
+]
+[plugin]
+prepend_previewers = [
+  { name = "*.md", run = "glow" },
+  { mime = "{image,audio,video}/*", run = "mediainfo" },
+  { mime = "application/x-subrip", run = "mediainfo" },
+  { mime = "audio/*", run = "exifaudio" },
+  { name = "*.{csv,tsv,json,parquet}", run = "duckdb" },
+]
+[[plugin.prepend_fetchers]]
+id    = "git" # Remove if Yazi > v26.1.22
+url   = "*"
+run   = "git"
+group = "git"
+
+
+ghostty config
+theme = Coffee Theme
+keybind = global:option+space=toggle_quick_terminal
+keybind = super+a=unbind
+quick-terminal-position = top
+quick-terminal-size = 40%          
+quick-terminal-autohide = true
+confirm-close-surface = false
+window-save-state = always
+adjust-cell-height = 20%
+window-padding-x = 10
+window-padding-y = 10
+
+
+
+
+nvim ~/.config/fish/config.fish
+if status is-interactive
+    # Commands to run in interactive sessions can go here
+end
+zoxide init fish | source
+alias cd z
+atuin init fish | source
+set -gx ZVM_INSTALL "$HOME/.zvm/self"
+set -gx PATH $PATH "$HOME/.zvm/bin"
+set -gx PATH $PATH "$ZVM_INSTALL/"
+set -gx EDITOR nvim
+set -gx VISUAL nvim
+alias lg='lazygit'
+alias yy='yazi'
+starship init fish | source # 初始化 Starship 提示符
+function right_arrow_smart_cycle
+    set -l old_pos (commandline -C)
+    commandline -f forward-char
+    set -l new_pos (commandline -C)
+    if test $old_pos -eq $new_pos
+        commandline -f beginning-of-line
+    end
+end
+function left_arrow_smart_cycle
+    set -l old_pos (commandline -C)
+    commandline -f backward-char
+    set -l new_pos (commandline -C)
+    if test $old_pos -eq $new_pos
+        commandline -f end-of-line
+    end
+end
+bind \e\[C right_arrow_smart_cycle
+bind \e\[D left_arrow_smart_cycle
+
+
+~/.config/nvim/lua/config/keymaps.lua # 补充快捷键
+local map = vim.keymap.set
+-- Settings
+vim.opt.wrap = true
+vim.opt.linebreak = true
+vim.opt.clipboard = "unnamedplus"
+-- Save
+map({ "n", "i", "v" }, "<D-s>", "<cmd>w<cr><esc>", { desc = "Save" })
+map({ "n", "i", "v" }, "<C-s>", "<cmd>w<cr><esc>", { desc = "Save" })
+-- Copy/Paste
+map({ "n", "v" }, "<D-c>", '"+y', { desc = "Copy" })
+map({ "n", "v" }, "<D-x>", '"+d', { desc = "Cut" })
+map({ "n", "v" }, "<D-v>", '"+p', { desc = "Paste" })
+map("i", "<D-v>", "<C-r>+", { desc = "Paste" })
+-- Undo/Redo
+map("n", "<D-z>", "u", { desc = "Undo" })
+map("i", "<D-z>", "<Esc>ua", { desc = "Undo" })
+map("n", "<D-S-z>", "<C-r>", { desc = "Redo" })
+map("n", "<C-r>", "<C-r>", { desc = "Redo" })
+-- Misc
+map("i", "jk", "<Esc>", { desc = "Exit insert mode" })
+-- force quit
+map({ "n", "i", "v" }, "<C-c>", "<cmd>qa!<cr>", { desc = "Force Quit All" })
+
+
+
