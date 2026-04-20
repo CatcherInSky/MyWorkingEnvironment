@@ -6,6 +6,8 @@
 | copyQ | 剪切板历史管理 | Windows / mac / Linux | 常用剪贴板工具 |
 | snipaste | 屏幕截图与贴图 | Windows / mac / Linux | 简洁截图工具 |
 | Git | 版本控制 | 通用 | 必装 |
+|  | APIKey 集中管理 | 通用 | 暂不考虑 |
+|  | 密码保管 | 通用 | 暂不考虑 |
 
 ## mac
 | 软件名称 | 作用 | 运行环境 | 备注 |
@@ -20,10 +22,10 @@
 | 软件名称 | 作用 | 运行环境 | 备注 |
 | --- | --- | --- | --- |
 | ScreenToGif | 屏幕录制 | Windows | 录制 GIF / 视频 |
-| Gopeed | 下载工具 | Windows | 提高效率 |
+| Gopeed | 快捷启动 | Windows | 提高效率 |
 | TranslucentTB | 任务栏透明 | Windows | 美化任务栏 |
 | ImageGlass | 图片浏览 | Windows | 轻量图片查看器 |
-| Flow Launcher | 启动器 | Windows | 类似 Spotlight |
+| Flow Launch | 启动器 | Windows | 类似 Spotlight |
 | Everything | 文件搜索 | Windows | 快速查找文件 |
 | Hotkey Screener | 快捷键测试 | Windows | 检查按键输入 |
 
@@ -32,20 +34,17 @@
 ## 主要组件
 | 软件名称 | 作用 | 运行环境 | 备注 |
 | --- | --- | --- | --- |
-| ghostty | 终端模拟器 | Linux / macOS | 速度快 |
+| ghostty | 终端性能优化 | Linux / macOS | 速度快 |
 | fish | 智能 shell | Linux / macOS | 语法高亮、Tab 补全 |
 | Starship | prompt 美化 | Linux / macOS | 上下文感知 |
 | zoxide | 目录跳转 | Linux / macOS | 快速切换目录 |
 | LazyVim | Neovim 配置 | Linux / macOS | 适合终端编辑 |
 | lazygit | Git 管理 | Linux / macOS | TUI Git 工具 |
-| atuin | 命令历史增强 | Linux / macOS | 无限日志保留，需配置 APIKey |
-| yazi | | Linux / macOS |  |
-| fd | | |
+| autin | 命令行智能助手 | Linux / macOS | 无限日志保留，需配置 APIKey |
 
 ## 包与环境工具
 | 软件名称 | 作用 | 运行环境 | 备注 |
 | --- | --- | --- | --- |
-|lua | | | |
 | Python | 运行时 | 通用 | 环境变量管理必备 |
 | zig | 运行时 | 通用 | 编译器 / 工具链 |
 | rust | 运行时 | 通用 | 编译与开发 |
@@ -53,7 +52,9 @@
 | npm | 包管理 | 通用 | Node 包管理 |
 | pnpm | 包管理 | 通用 | 快速安装 |
 | yarn | 包管理 | 通用 | 备选方案 |
+| pkg | 安装工具 | 通用 | 系统软件安装 |
 | winget | 安装工具 | Windows | Windows 包管理 |
+| snap | 安装工具 | Linux | 通用软件安装 |
 | homebrew | 安装工具 | macOS / Linux | 包管理器 |
 | apt | 安装工具 | Debian / Ubuntu | 系统包管理 |
 | pip | Python 包管理 | 通用 | Python 依赖安装 |
@@ -67,230 +68,86 @@
 | tsx | 运行时 | 通用 | 直接执行 TS |
 | gh | GitHub CLI | 通用 | GitHub 操作 |
 | docker | 容器 | 通用 | 开发 / 运行环境 |
+| pyenv | | | |
 
 ## 其他工具
 | 软件名称 | 作用 | 运行环境 | 备注 |
 | --- | --- | --- | --- |
 | @anthropic-ai/claude-code | AI 开发库 | 通用 | 代码辅助 |
 | @google/gemini-cli | AI CLI | 通用 | Gemini 命令行 |
+| webpack | 前端构建 | 通用 | 打包工具 |
 | wrangler | Cloudflare Workers | 通用 | 边缘应用部署 |
 
-# 脚本
+# 安装脚本
 
-## 执行流程 ⚠️
-正确的执行顺序很重要。**所有脚本都应在 bash 中执行**：
+## 安装脚本功能说明
+- 脚本文件：`install.sh`
+- 自动检测运行环境：Windows、WSL/Linux、macOS
+- Windows 环境：安装“通用”软件和 Windows 专用软件
+- WSL 或原生 Linux：安装“终端方案”中的所有包与终端工具
+- macOS：安装“通用”软件、macOS 专用软件，以及“终端方案”里的所有包
+- 迁移 shell 环境变量：将 `bash` / `zsh` 中的 `export` 内容转换到 `fish` 配置中
+- 若无法直接安装，脚本会下载对应安装包到 `~/Downloads/installers`
 
-```bash
-# 步骤 1️⃣ 在 bash 中安装所有软件和初始化 fish 配置
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/install.sh)
+## 使用方法
+1. 下载或克隆仓库到本地：
+   ```bash
+   git clone <仓库地址>
+   cd AI-
+   ```
+2. 赋予执行权限并运行：
+   ```bash
+   chmod +x install.sh
+   ./install.sh
+   ```
+3. Windows 原生环境下，如果你使用 Git Bash 或 WSL，也可以同样执行：
+   ```bash
+   bash install.sh
+   ```
+4. 运行完成后，脚本会在终端输出安装结果和迁移状态。
 
-# 步骤 2️⃣ 在 bash 中迁移环境变量到 fish
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/migrate_to_fish.sh)
+# claude
 
-# 步骤 3️⃣ 切换到 fish shell
-exec fish
+## 1. 通过 hooks 配置桌面 Notification
+- 目标：完成或询问中途弹出通知
+- 实现方式：通过 shell / 应用 hooks 调用桌面通知命令
+- 示例：
+  - macOS: `osascript -e 'display notification "任务完成" with title "Claude"'`
+  - Linux: `notify-send "Claude" "任务完成"`
+  - Windows: 使用 PowerShell `New-BurntToastNotification` 或第三方通知工具
+- 说明：需要在任务流程或 API 调用完成时触发 hook，并将结果传给通知命令
 
-# 步骤 4️⃣ （可选）配置 Claude Code
-bash setup_claude.sh
+```
+// ~/.claude/settings.json
+"hooks: {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/notify.sh 'Claude Code' '任务已完成，等待您的输入' 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+}
 ```
 
-## install.sh — 软件安装和初始化
-自动检测运行环境（Windows / WSL / Linux / macOS），安装对应平台的软件和工具。
-
-**负责内容**：
-- ✅ 安装所有必需的软件包（git、fish、neovim 等）
-- ✅ 初始化 fish 配置：zoxide、atuin、lazyvim 等
-- ✅ 安装开发工具链（Rust、Node、Python 等）
-
-| 环境 | 行为 |
-| --- | --- |
-| Linux / WSL | apt 安装基础包，官方脚本安装 starship / zoxide / lazygit，GitHub CLI 通过官方 apt 源安装 |
-| macOS | Homebrew 安装所有 formulas 和 casks（含 Docker Desktop、ghostty） |
-| Windows | winget 批量安装 |
-
-**故障排查**：
-- 运行失败后可重复执行（幂等）
-- 如果 zoxide/lazyvim 未配置，检查 `~/.config/fish/config.fish` 是否包含相关配置
-
-## migrate_to_fish.sh — 环境变量迁移和验证
-从 bash/zsh 迁移现有环境变量到 fish，并验证工具配置。
-
-**负责内容**：
-- ✅ 将 `~/.bashrc` / `~/.bash_profile` / `~/.profile` 中的 PATH 条目迁移到 fish
-- ✅ 迁移自定义 export 变量
-- ✅ 验证 zoxide、atuin 等工具是否已配置
-- ✅ 设置 fish 为默认 shell
-
-**工作原理**：
-- **PATH 条目**：通过 `fish_add_path` 添加（幂等，不重复）
-- **其他 export 变量**：在 bash 子进程中求值（正确展开 `$HOME` 等），写入 `~/.config/fish/config.fish`
-
-**故障排查**：
-- 如果某些工具（如 zoxide）配置仍然缺失，运行此脚本可以补充
-- 检查输出中的 ✓ 标记，确保所有工具已正确配置
-
-## setup_claude.sh — Claude Code 配置
-- 将 `notify.sh` 复制到 `~/.claude/` 并设为可执行
-- 合并 Stop / Notification hooks 到 `~/.claude/settings.json`（如已存在则跳过，不覆盖）
-- 打印 claude-hud 插件安装指引
-
-```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/setup_claude.sh)
-```
-
-> claude-hud 插件需在 Claude Code 会话中手动安装：
-> ```
-> /plugin marketplace add jarrodwatts/claude-hud
-> /plugin install claude-hud
-> /claude-hud:setup
-> ```
-
-## notify.sh — 跨平台桌面通知
-| 环境 | 实现 |
-| --- | --- |
-| macOS | `osascript` |
-| WSL2 | PowerShell Toast Notification |
-| Linux | `notify-send` |
-| 其他 | 终端响铃（fallback） |
+## 2. 配置 claude-hud
+- 安装插件：
+  - `/plugin marketplace add jarrodwatts/claude-hud`
+  - `/plugin install claude-hud`
+- 初始化：
+  - `/claude-hud:setup`
+- 备注：
+  - 该插件用于增强 Claude HUD 交互体验
+  - 需要确认是否已安装相应的插件管理器和环境
+  - 如果需要 hook 通知，可在 HUD 配置中添加自定义命令调用桌面通知插件
 
 # 设计 (暂不考虑)
-- pencil? figma?
+- pencil? snitich? figma?
 
 # 测试 (暂不考虑)
 - 怎么看浏览器？
-
-# 没写进脚本的其他操作
-
-
-ya pkg add yazi-rs/plugins:smart-enter
-ya pkg add yazi-rs/plugins:git
-ya pkg add yazi-rs/plugins:full-border
-ya pkg add yazi-rs/plugins:chmod
-ya pkg add Reledia/glow
-ya pkg add yazi-rs/plugins:piper
-ya pkg add boydaihungst/mediainfo
-ya pkg add Sonico98/exifaudio
-ya pkg add wylie102/duckdb
-
-
-~/.config/yazi/init.lua
----@diagnostic disable: undefined-global
-require("git"):setup({ order = 1500 })
-require("full-border"):setup()
-if THEME and THEME.status then
-	local th = THEME.status
-	th.git = th.git or {}
-	th.git.unknown_sign = " "
-	th.git.modified_sign = "M"
-	th.git.deleted_sign = "D"
-	th.git.clean_sign = "✔"
-end
-
-~/.config/yazi/yazi.toml
-[mgr]
-show_hidden = true
-show_symlink = true
-linemode = "size"
-sort_by = "natural"
-sort_dir_first = true
-show_git = true
-[opener]
-edit = [
-  { run = 'nvim "$@"', block = true, desc = "Neovim" },
-]
-[open]
-prepend_rules = [
-  { name = "*", use = "edit" },
-]
-[plugin]
-prepend_previewers = [
-  { name = "*.md", run = "glow" },
-  { mime = "{image,audio,video}/*", run = "mediainfo" },
-  { mime = "application/x-subrip", run = "mediainfo" },
-  { mime = "audio/*", run = "exifaudio" },
-  { name = "*.{csv,tsv,json,parquet}", run = "duckdb" },
-]
-[[plugin.prepend_fetchers]]
-id    = "git" # Remove if Yazi > v26.1.22
-url   = "*"
-run   = "git"
-group = "git"
-
-
-ghostty config
-theme = Coffee Theme
-keybind = global:option+space=toggle_quick_terminal
-keybind = super+a=unbind
-quick-terminal-position = top
-quick-terminal-size = 40%          
-quick-terminal-autohide = true
-confirm-close-surface = false
-window-save-state = always
-adjust-cell-height = 20%
-window-padding-x = 10
-window-padding-y = 10
-
-
-
-
-nvim ~/.config/fish/config.fish
-if status is-interactive
-    # Commands to run in interactive sessions can go here
-end
-zoxide init fish | source
-alias cd z
-atuin init fish | source
-set -gx ZVM_INSTALL "$HOME/.zvm/self"
-set -gx PATH $PATH "$HOME/.zvm/bin"
-set -gx PATH $PATH "$ZVM_INSTALL/"
-set -gx EDITOR nvim
-set -gx VISUAL nvim
-alias lg='lazygit'
-alias yy='yazi'
-starship init fish | source # 初始化 Starship 提示符
-function right_arrow_smart_cycle
-    set -l old_pos (commandline -C)
-    commandline -f forward-char
-    set -l new_pos (commandline -C)
-    if test $old_pos -eq $new_pos
-        commandline -f beginning-of-line
-    end
-end
-function left_arrow_smart_cycle
-    set -l old_pos (commandline -C)
-    commandline -f backward-char
-    set -l new_pos (commandline -C)
-    if test $old_pos -eq $new_pos
-        commandline -f end-of-line
-    end
-end
-bind \e\[C right_arrow_smart_cycle
-bind \e\[D left_arrow_smart_cycle
-
-
-~/.config/nvim/lua/config/keymaps.lua # 补充快捷键
-local map = vim.keymap.set
--- Settings
-vim.opt.wrap = true
-vim.opt.linebreak = true
-vim.opt.clipboard = "unnamedplus"
--- Save
-map({ "n", "i", "v" }, "<D-s>", "<cmd>w<cr><esc>", { desc = "Save" })
-map({ "n", "i", "v" }, "<C-s>", "<cmd>w<cr><esc>", { desc = "Save" })
--- Copy/Paste
-map({ "n", "v" }, "<D-c>", '"+y', { desc = "Copy" })
-map({ "n", "v" }, "<D-x>", '"+d', { desc = "Cut" })
-map({ "n", "v" }, "<D-v>", '"+p', { desc = "Paste" })
-map("i", "<D-v>", "<C-r>+", { desc = "Paste" })
--- Undo/Redo
-map("n", "<D-z>", "u", { desc = "Undo" })
-map("i", "<D-z>", "<Esc>ua", { desc = "Undo" })
-map("n", "<D-S-z>", "<C-r>", { desc = "Redo" })
-map("n", "<C-r>", "<C-r>", { desc = "Redo" })
--- Misc
-map("i", "jk", "<Esc>", { desc = "Exit insert mode" })
--- force quit
-map({ "n", "i", "v" }, "<C-c>", "<cmd>qa!<cr>", { desc = "Force Quit All" })
-
-
 

@@ -2,433 +2,243 @@
 set -euo pipefail
 
 USER_HOME="${HOME:-$(pwd)}"
+DOWNLOAD_DIR="${USER_HOME}/Downloads/installers"
+FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
 
-info()       { printf "[INFO] %s\n" "$1"; }
-warn()       { printf "[WARN] %s\n" "$1"; }
+info() { printf "[INFO] %s\n" "$1"; }
+warn() { printf "[WARN] %s\n" "$1"; }
 error_exit() { printf "[ERROR] %s\n" "$1" >&2; exit 1; }
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
-# --- Shared tool installers ---
-
-install_starship() {
-  command_exists starship && return
-  info "安装 Starship"
-  curl -sS https://starship.rs/install.sh | sh
-  
-  # 创建配置文件
-  mkdir -p "${USER_HOME}/.config"
-  [ ! -f "${USER_HOME}/.config/starship.toml" ] && \
-    curl -sS https://raw.githubusercontent.com/starship/starship/master/starship.toml -o "${USER_HOME}/.config/starship.toml"
-  info "✓ Starship 已安装，配置文件: ~/.config/starship.toml"
+make_download_dir() {
+  mkdir -p "$DOWNLOAD_DIR"
 }
 
-install_zoxide() {
-  command_exists zoxide && return
-  info "安装 zoxide"
-  curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
-  info "✓ zoxide 已安装"
+download_file() {
+  local url="$1"
+  local dest="$2"
+  info "Downloading $url to $dest"
+  curl -fsSL "$url" -o "$dest" || {
+    warn "下载失败: $url"
+    return 1
+  }
 }
 
-init_zoxide_for_fish() {
-  command_exists fish || { info "  fish 未安装，跳过 zoxide fish 配置"; return 0; }
-  command_exists zoxide || { info "  zoxide 未安装，跳过"; return 0; }
-  
-  local FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
-  local FISH_COMPLETIONS="${USER_HOME}/.config/fish/completions"
-  
-  mkdir -p "$(dirname "$FISH_CONFIG")" "$FISH_COMPLETIONS"
-  touch "$FISH_CONFIG"
-  
-  # 检查是否已配置
-  if grep -Fxq "zoxide init fish | source" "$FISH_CONFIG" 2>/dev/null; then
-    info "✓ zoxide 已配置到 fish（跳过）"
-    return 0
-  fi
-  
-  printf '\n# Zoxide initialization\nzoxide init fish | source\nalias cd z\n' >> "$FISH_CONFIG"
-  info "✓ zoxide 已配置到 fish"
-}
-
-install_yazi() {
-  command_exists yazi && return
-  info "安装 yazi"
-  
-  case "$(uname -m)" in
-    x86_64)         arch="x86_64" ;;
-    aarch64|arm64)  arch="aarch64" ;;
-    *) warn "未知架构，跳过 yazi"; return ;;
-  esac
-  
-  local version
-  version=$(curl -fsSL "https://api.github.com/repos/sxyazi/yazi/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
-  [ -z "$version" ] && { warn "无法获取 yazi 版本，跳过"; return; }
-  
-  local os_name
-  case "$(uname -s)" in
-    Linux)  os_name="linux" ;;
-    Darwin) os_name="macos" ;;
-    *)  warn "不支持的操作系统，跳过 yazi"; return ;;
-  esac
-  
-  info "从 release 下载 yazi v${version}"
-  curl -fsSL "https://github.com/sxyazi/yazi/releases/download/v${version}/yazi-${arch}-unknown-${os_name}.zip" \
-    -o /tmp/yazi.zip 2>/dev/null || { warn "下载失败，跳过 yazi"; return; }
-  
-  unzip -o /tmp/yazi.zip -d /tmp 2>/dev/null || { warn "解压失败，跳过 yazi"; rm -f /tmp/yazi.zip; return; }
-  
-  if [ -f "/tmp/yazi" ]; then
-    mkdir -p "${USER_HOME}/.local/bin"
-    mv /tmp/yazi "${USER_HOME}/.local/bin/yazi"
-    chmod +x "${USER_HOME}/.local/bin/yazi"
-    info "✓ yazi 已安装"
-  else
-    warn "无法找到 yazi 可执行文件，跳过"
-  fi
-  
-  rm -f /tmp/yazi.zip /tmp/yazi-${arch}-unknown-${os_name} 2>/dev/null
-}
-
-install_atuin() {
-  command_exists atuin && return
-  info "安装 atuin"
-  
-  curl -fsSL https://setup.atuin.sh | bash || { warn "atuin 安装失败，跳过"; return; }
-  
-  info "✓ atuin 已安装"
-}
-
-init_atuin_for_fish() {
-  command_exists fish || { info "  fish 未安装，跳过 atuin fish 配置"; return 0; }
-  command_exists atuin || { info "  atuin 未安装，跳过"; return 0; }
-  
-  local FISH_CONFIG="${USER_HOME}/.config/fish/config.fish"
-  
+add_fish_config_line() {
+  local line="$1"
   mkdir -p "$(dirname "$FISH_CONFIG")"
-  touch "$FISH_CONFIG"
-  
-  # 检查是否已配置
-  if grep -Fxq "atuin init fish | source" "$FISH_CONFIG" 2>/dev/null; then
-    info "✓ atuin 已配置到 fish（跳过）"
-    return 0
+  if ! grep -Fxq "$line" "$FISH_CONFIG" 2>/dev/null; then
+    printf '%s\n' "$line" >> "$FISH_CONFIG"
   fi
-  
-  printf '\n# Atuin initialization\natuin init fish | source\n' >> "$FISH_CONFIG"
-  info "✓ atuin 已配置到 fish"
-  info "  提示：运行 'atuin account register' 或 'atuin account login' 来启用云同步"
+}
+
+migrate_shell_envs_to_fish() {
+  info "开始将 Bash / Zsh 中的环境变量迁移到 fish"
+  local shells=("$USER_HOME/.zshrc" "$USER_HOME/.bashrc" "$USER_HOME/.bash_profile" "$USER_HOME/.profile")
+  local found=false
+
+  for rc in "${shells[@]}"; do
+    if [ -f "$rc" ]; then
+      found=true
+      while IFS= read -r line; do
+        line="${line%%#*}"
+        if [[ "$line" =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+          local key="${BASH_REMATCH[1]}"
+          local value="${BASH_REMATCH[2]}"
+          value="${value%"}"; value="${value#"}"
+          value="${value%\'}"; value="${value#\'}"
+          add_fish_config_line "set -gx $key '$value'"
+        elif [[ "$line" =~ ^[[:space:]]*PATH= ]]; then
+          local path_value="${line#*=}"
+          path_value="${path_value%"}"; path_value="${path_value#"}"
+          path_value="${path_value%\'}"; path_value="${path_value#\'}"
+          IFS=':' read -r -a path_parts <<< "$path_value"
+          for p in "${path_parts[@]}"; do
+            [ -n "$p" ] && add_fish_config_line "set -gx PATH \$PATH $p"
+          done
+        fi
+      done < "$rc"
+    fi
+  done
+
+  if ! $found; then
+    warn "未找到 Bash 或 Zsh 配置文件，无法自动迁移环境变量。"
+    return 1
+  fi
+
+  info "环境变量迁移已写入 $FISH_CONFIG"
+}
+
+install_brew_if_missing() {
+  if command_exists brew; then
+    return
+  fi
+  info "Homebrew 未安装，开始安装 Homebrew"
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || true)"
+  eval "$(/usr/local/bin/brew shellenv 2>/dev/null || true)"
+}
+
+install_apt_packages() {
+  local packages=("git" "python3" "python3-pip" "curl" "wget" "fish" "starship" "zoxide" "neovim" "lazygit" "ffmpeg" "yt-dlp" "gh" "docker.io" "nodejs" "npm")
+  sudo apt-get update
+  sudo apt-get install -y "${packages[@]}"
 }
 
 install_nvm() {
-  [ -d "${USER_HOME}/.nvm" ] && return
+  if [ -d "$USER_HOME/.nvm" ] || command_exists nvm; then
+    return
+  fi
   info "安装 nvm"
-  local version
-  version=$(curl -fsSL "https://api.github.com/repos/nvm-sh/nvm/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"\(v[^"]*\)".*/\1/')
-  curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${version}/install.sh" | bash
-  export NVM_DIR="${USER_HOME}/.nvm"
-  [ -s "${NVM_DIR}/nvm.sh" ] && \. "${NVM_DIR}/nvm.sh"
+  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.6/install.sh | bash
+  export NVM_DIR="$USER_HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 }
 
 install_zvm() {
-  command_exists zvm && return
-  info "安装 zvm (Zig Version Manager)"
-  curl -fsSL https://raw.githubusercontent.com/tristanisham/zvm/master/install.sh | bash
+  if command_exists zvm || [ -d "$USER_HOME/.zvm" ]; then
+    return
+  fi
+  info "安装 zvm"
+  curl -fsSL https://raw.githubusercontent.com/maralla/zvm/main/zvm.zsh | bash
 }
 
 install_npm_globals() {
-  command_exists npm || { warn "npm 未安装，跳过全局包安装"; return; }
-  info "安装全局 npm 包: pnpm yarn typescript tsx"
-  npm install -g pnpm yarn typescript tsx 2>/dev/null || true
+  if ! command_exists npm; then
+    warn "npm 未安装，跳过全局 npm 包安装"
+    return
+  fi
+  info "安装全局 npm 包"
+  npm install -g pnpm yarn typescript tsx || true
 }
 
 install_pipx() {
-  command_exists pipx && return
-  command_exists python3 || { warn "python3 未找到，跳过 pipx"; return; }
-  info "安装 pipx"
-  python3 -m pip install --user pipx 2>/dev/null \
-    || sudo apt-get install -y python3-pipx 2>/dev/null \
-    || true
-  python3 -m pipx ensurepath 2>/dev/null || true
-}
-
-install_yt_dlp() {
-  command_exists yt-dlp && return
-  info "安装 yt-dlp"
   if command_exists pipx; then
-    pipx install yt-dlp || true
-  elif command_exists pip3; then
-    pip3 install --user yt-dlp || true
-  else
-    warn "pipx/pip3 均未找到，跳过 yt-dlp"
-  fi
-}
-
-install_neovim() {
-  command_exists nvim && return
-  info "配置 Neovim"
-  mkdir -p "${USER_HOME}/.config/nvim" "${USER_HOME}/.local/share/nvim"
-  info "✓ Neovim 目录已准备"
-}
-
-install_lazyvim() {
-  command_exists nvim || { warn "Neovim 未安装，无法安装 LazyVim"; return; }
-  if ! command_exists git; then
-    warn "git 未安装，尝试通过 Homebrew 安装 git"
-    if command_exists brew; then
-      if ! brew install git >/dev/null 2>&1; then
-        warn "git 安装失败，无法继续安装 LazyVim"
-        return
-      fi
-      eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null || true)"
-    else
-      warn "brew 未安装，无法安装 git"
-      return
-    fi
-  fi
-
-  if [ -d "${USER_HOME}/.config/nvim" ]; then
-    if [ "$(ls -A "${USER_HOME}/.config/nvim")" != "" ]; then
-      warn "~/.config/nvim 已存在且非空，备份到 ~/.config/nvim.bak"
-      if mv "${USER_HOME}/.config/nvim" "${USER_HOME}/.config/nvim.bak" 2>/dev/null; then
-        info "  旧配置已备份"
-      else
-        warn "备份失败，尝试移除旧目录以继续安装"
-        rm -rf "${USER_HOME}/.config/nvim"
-      fi
-    fi
-  fi
-
-  mkdir -p "${USER_HOME}/.config"
-  info "安装 LazyVim"
-  local clone_err
-  if ! clone_err=$(git clone --depth 1 https://github.com/LazyVim/starter "${USER_HOME}/.config/nvim" 2>&1); then
-    warn "LazyVim 安装失败，检查网络或权限"
-    warn "$clone_err"
     return
   fi
-
-  rm -rf "${USER_HOME}/.config/nvim/.git" 2>/dev/null || true
-  info "✓ LazyVim 已安装至 ~/.config/nvim"
-  info "  首次启动 nvim 时将自动下载和配置插件"
-}
-
-init_lazyvim_for_fish() {
-  command_exists fish || { info "  fish 未安装，跳过 Neovim 补全"; return 0; }
-  command_exists nvim || { info "  nvim 未安装，跳过 Neovim 补全"; return 0; }
-  
-  local FISH_COMPLETIONS="${USER_HOME}/.config/fish/completions"
-  mkdir -p "$FISH_COMPLETIONS"
-  
-  # 检查补全文件是否已存在
-  if [ -f "$FISH_COMPLETIONS/nvim.fish" ]; then
-    info "✓ Neovim 补全已存在（跳过）"
-    return 0
+  if command_exists python3; then
+    python3 -m pip install --user pipx
+    python3 -m pipx ensurepath
   fi
-  
-  cat > "$FISH_COMPLETIONS/nvim.fish" << 'EOF'
-# Neovim completions for fish
-complete -c nvim -n "__fish_use_subcommand_from_list" -s c -l command -d "Execute command"
-complete -c nvim -n "__fish_use_subcommand_from_list" -s d -l diff -d "Diff mode"
-complete -c nvim -n "__fish_use_subcommand_from_list" -s e -l ex -d "Ex mode"
-complete -c nvim -n "__fish_use_subcommand_from_list" -s E -d "Ex mode (no plugins)"
-complete -c nvim -n "__fish_use_subcommand_from_list" -s h -l help -d "Show help"
-complete -c nvim -n "__fish_use_subcommand_from_list" -s v -l version -d "Show version"
-complete -c nvim -f
-EOF
-  
-  info "✓ Neovim 补全已生成至: $FISH_COMPLETIONS/nvim.fish"
-  info "  首次启动 nvim 时 LazyVim 将自动下载和配置插件"
-}
-
-# --- Linux ---
-
-install_apt_base() {
-  info "安装 apt 基础包"
-  sudo apt-get update -q
-  sudo apt-get install -y git python3 python3-pip curl wget fish neovim ffmpeg nodejs npm
-}
-
-install_lazygit_linux() {
-  command_exists lazygit && return
-  info "安装 lazygit"
-  
-  # 尝试使用官方脚本（推荐方法）
-  if curl -s https://raw.githubusercontent.com/jesseduffield/lazygit/master/scripts/install_update_linux.sh | bash 2>/dev/null; then
-    info "✓ lazygit 已安装"
-    return 0
-  fi
-  
-  # 备选方案：从 release 下载
-  local arch version
-  case "$(uname -m)" in
-    x86_64)         arch="x86_64" ;;
-    aarch64|arm64)  arch="arm64" ;;
-    *) warn "未知架构，跳过 lazygit"; return ;;
-  esac
-  
-  version=$(curl -fsSL "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
-  [ -z "$version" ] && { warn "无法获取 lazygit 版本，跳过"; return; }
-  
-  info "从 release 下载 lazygit v${version}"
-  curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/v${version}/lazygit_${version}_Linux_${arch}.tar.gz" \
-    | tar xz -C /tmp lazygit 2>/dev/null || { warn "下载失败，跳过 lazygit"; return; }
-  
-  sudo install /tmp/lazygit /usr/local/bin/lazygit 2>/dev/null || warn "无法安装 lazygit，请检查权限"
-  rm -f /tmp/lazygit
-  info "✓ lazygit 已安装"
-}
-
-install_gh_linux() {
-  command_exists gh && return
-  info "安装 GitHub CLI"
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null
-  sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-  sudo apt-get update -q
-  sudo apt-get install -y gh
-}
-
-install_linux() {
-  install_apt_base
-  install_gh_linux
-  install_starship
-  install_zoxide
-  init_zoxide_for_fish
-  install_lazygit_linux
-  install_yazi
-  install_atuin
-  init_atuin_for_fish
-  install_neovim
-  install_lazyvim
-  init_lazyvim_for_fish
-  install_nvm
-  install_zvm
-  install_pipx
-  install_yt_dlp
-  install_npm_globals
-  
-  info ""
-  info "✓ Linux 安装完成"
-}
-
-# --- macOS ---
-
-install_brew_if_missing() {
-  command_exists brew && return
-  info "安装 Homebrew"
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null || true)"
 }
 
 install_macos() {
   install_brew_if_missing
-  local formulas=(git fish starship zoxide lazygit neovim python node pnpm yarn pipx rustup gh ffmpeg yt-dlp atuin yazi)
-  # docker via cask = Docker Desktop (includes CLI); ghostty is the terminal emulator
-  local casks=(ghostty docker copyq snipaste macs-fan-control scroll-reverser stats keyclu kap)
-
-  info "安装 Homebrew formulas"
+  info "使用 Homebrew 安装通用软件、macOS 软件和终端方案"
+  local casks=("copyq" "snipaste" "macs-fan-control" "scroll-reverser" "stats" "keyclu" "kap")
+  local formulas=("git" "fish" "starship" "zoxide" "lazygit" "python" "node" "pnpm" "yarn" "pipx" "rustup-init" "gh" "docker" "nvm" "zvm" "ffmpeg" "yt-dlp" "typescript" "tsx")
   for pkg in "${formulas[@]}"; do
-    pkg="${pkg:-}"
-    if [ -z "$pkg" ]; then
-      warn "brew formula 名称为空，跳过"
-      continue
-    fi
-
-    if ! brew install "${pkg}" >/dev/null 2>&1; then
-      warn "brew 无法安装 ${pkg}，跳过"
-    fi
+    brew install "$pkg" || warn "Homebrew 无法安装 $pkg，继续下一项"
   done
-  info "安装 Homebrew casks"
   for pkg in "${casks[@]}"; do
-    pkg="${pkg:-}"
-    if [ -z "$pkg" ]; then
-      warn "brew cask 名称为空，跳过"
-      continue
-    fi
-
-    if ! brew install --cask "${pkg}" >/dev/null 2>&1; then
-      warn "brew cask 无法安装 ${pkg}，跳过"
-    fi
+    brew install --cask "$pkg" || warn "Homebrew Cask 无法安装 $pkg，继续下一项"
   done
-
-  install_starship
-  install_zoxide
-  init_zoxide_for_fish
-  init_atuin_for_fish
-  install_neovim
-  install_lazyvim
-  init_lazyvim_for_fish
   install_nvm
   install_zvm
+  install_pipx
   install_npm_globals
-  
-  info ""
-  info "✓ macOS 安装完成"
 }
 
-# --- Windows ---
+install_linux() {
+  install_apt_packages
+  install_nvm
+  install_zvm
+  install_pipx
+  install_npm_globals
+}
 
-install_windows_pkg() {
+install_windows_package() {
   local id="$1"
-  command_exists powershell.exe || return 1
-  powershell.exe -NoProfile -ExecutionPolicy Bypass \
-    -Command "winget install --id '$id' --exact --silent -e" >/dev/null 2>&1
+  local name="$2"
+  if ! command_exists powershell.exe; then
+    warn "powershell.exe 未找到，Windows 安装将受限。"
+    return 1
+  fi
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { winget install --id '$id' --exact --silent -e } catch { exit 1 }" >/dev/null 2>&1 || return 1
+}
+
+download_windows_installer() {
+  local url="$1"
+  local dest="${DOWNLOAD_DIR}/$(basename "$url")"
+  download_file "$url" "$dest"
 }
 
 install_windows() {
-  info "安装 Windows 软件（通过 winget）"
-  local pkgs=(
-    "Git.Git"
-    "hluk.CopyQ"
-    "Snipaste.Snipaste"
-    "NickeManarin.ScreenToGif"
-    "TranslucentTB.TranslucentTB"
-    "codeoverjoy.ImageGlass"
-    "voidtools.Everything"
-    "Flow-Launcher.Flow-Launcher"
-    "AppWork.Gopeed"
+  info "检测到 Windows 环境，安装通用软件和 Windows 专用软件"
+  make_download_dir
+  local items=(
+    "Git.Git|Git"
+    "OpenClipboard.CopyQ|copyQ"
+    "Snipe.\.???|snipaste"
+    "ScreenToGif.ScreenToGif|ScreenToGif"
+    "TranslucentTB.TranslucentTB|TranslucentTB"
+    "ImageGlass.ImageGlass|ImageGlass"
+    "CheckPoint.Gopeed|Gopeed"
+    "Everything.Everything|Everything"
+    "HotkeyScreener.HotkeyScreener|Hotkey Screener"
   )
-  for id in "${pkgs[@]}"; do
-    install_windows_pkg "$id" \
-      && info "  已安装: $id" \
-      || warn "  安装失败（请手动安装）: $id"
+
+  for entry in "${items[@]}"; do
+    IFS='|' read -r id name <<< "$entry"
+    info "尝试安装 $name"
+    if install_windows_package "$id" "$name"; then
+      info "$name 安装成功"
+    else
+      warn "$name winget 安装失败，改为下载安装包"
+      case "$name" in
+        "copyQ") download_windows_installer "https://github.com/hluk/CopyQ/releases/latest/download/CopyQ-win.zip" || true ;;
+        "ScreenToGif") download_windows_installer "https://github.com/NickeManarin/ScreenToGif/releases/latest/download/ScreenToGif.zip" || true ;;
+        "ImageGlass") download_windows_installer "https://imageglass.org/download" || true ;;
+        "Everything") download_windows_installer "https://www.voidtools.com/Everything-1.4.1.1009.x64.zip" || true ;;
+        *) warn "未指定 $name 的下载链接，已跳过。" ;;
+      esac
+    fi
   done
 }
 
-# --- Entry point ---
-
-detect_os() {
-  case "$(uname -s 2>/dev/null)" in
-    Darwin) echo "macos" ;;
-    Linux)
-      if grep -qi microsoft /proc/version 2>/dev/null || [ -n "${WSL_DISTRO_NAME:-}" ]; then
-        echo "wsl"
-      else
-        echo "linux"
-      fi ;;
-    CYGWIN*|MINGW*|MSYS*) echo "windows" ;;
-    *) [ "${OS:-}" = "Windows_NT" ] && echo "windows" || echo "unknown" ;;
-  esac
-}
-
 main() {
-  local os
-  os=$(detect_os)
-  info "运行环境：$os"
+  local os_type="unknown"
+  if command_exists uname; then
+    case "$(uname -s)" in
+      Darwin) os_type="macos" ;;
+      Linux)
+        if grep -qi microsoft /proc/version 2>/dev/null || [ -n "${WSL_DISTRO_NAME:-}" ]; then
+          os_type="wsl"
+        else
+          os_type="linux"
+        fi
+        ;;
+      CYGWIN*|MINGW*|MSYS*) os_type="windows" ;;
+      *) os_type="unknown" ;;
+    esac
+  elif [ "${OS:-}" = "Windows_NT" ]; then
+    os_type="windows"
+  fi
 
-  case "$os" in
-    macos)     install_macos ;;
-    linux|wsl) install_linux ;;
-    windows)   install_windows ;;
-    *) error_exit "无法识别运行环境，请在 macOS、Linux、WSL 或 Windows 下执行。" ;;
+  info "当前检测到运行环境：$os_type"
+
+  case "$os_type" in
+    macos)
+      install_macos
+      ;;
+    linux|wsl)
+      install_linux
+      ;;
+    windows)
+      install_windows
+      ;;
+    *)
+      error_exit "无法识别运行环境，请在 macOS、Linux、WSL 或 Windows 下执行。"
+      ;;
   esac
 
-  info "安装完成。后续步骤："
-  info "  迁移 fish 环境变量：bash migrate_to_fish.sh"
-  info "  配置 Claude Code：  bash setup_claude.sh"
+  if command_exists fish; then
+    migrate_shell_envs_to_fish || warn "环境变量迁移未完成，请手动检查 $FISH_CONFIG"
+  else
+    warn "fish 未安装，跳过 shell 环境迁移。"
+  fi
+
+  info "安装脚本执行完成。请根据输出检查是否存在未成功安装的项目。"
 }
 
 main "$@"

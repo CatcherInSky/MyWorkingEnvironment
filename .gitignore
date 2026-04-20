@@ -1,2 +1,5 @@
 .claude/settings.json
 .claude/settings.local.json
+*.tar.gz
+install
+nvim.appimage
