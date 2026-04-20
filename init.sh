@@ -688,9 +688,10 @@ configure_nvim() {
     echo "Configuring Neovim..."
     mkdir -p ~/.config/nvim/lua/config
     mkdir -p ~/.config/nvim/lua/plugins
-    cat > ~/.config/nvim/lua/config/keymaps.lua << 'EOF'
+
+    if [[ "$OS" == "mac" ]]; then
+        cat > ~/.config/nvim/lua/config/keymaps.lua << 'EOF'
 local map = vim.keymap.set
--- Settings
 vim.opt.wrap = true
 vim.opt.linebreak = true
 vim.opt.clipboard = "unnamedplus"
@@ -709,9 +710,36 @@ map("n", "<D-S-z>", "<C-r>", { desc = "Redo" })
 map("n", "<C-r>", "<C-r>", { desc = "Redo" })
 -- Misc
 map("i", "jk", "<Esc>", { desc = "Exit insert mode" })
--- force quit
+-- force quit (<C-c> safe on mac: copy uses <D-c>, no conflict)
 map({ "n", "i", "v" }, "<C-c>", "<cmd>qa!<cr>", { desc = "Force Quit All" })
 EOF
+    else
+        # Linux / Windows
+        # Notes:
+        #   <D-...> (Command key) does not exist — replaced with <C-...>
+        #   <C-v> normal/visual = Visual Block entry, not remapped (use p/P instead)
+        #   <C-z> removed — suspends neovim to background in terminal
+        #   <C-c> force quit removed — conflicts with copy in visual mode
+        #   clipboard=unnamedplus requires xclip/xsel (X11) or wl-clipboard (Wayland)
+        cat > ~/.config/nvim/lua/config/keymaps.lua << 'EOF'
+local map = vim.keymap.set
+vim.opt.wrap = true
+vim.opt.linebreak = true
+vim.opt.clipboard = "unnamedplus"
+-- Save
+map({ "n", "i", "v" }, "<C-s>", "<cmd>w<cr><esc>", { desc = "Save" })
+-- Copy/Cut: visual mode only to avoid normal-mode conflicts
+-- (<C-c> normal = cancel op, <C-x> normal = decrement number)
+map("v", "<C-c>", '"+y', { desc = "Copy" })
+map("v", "<C-x>", '"+d', { desc = "Cut" })
+-- Paste: insert mode only; normal mode use p/P (clipboard=unnamedplus links y/p to system clipboard)
+map("i", "<C-v>", "<C-r>+", { desc = "Paste" })
+-- Redo (Undo via u in normal mode)
+map("n", "<C-r>", "<C-r>", { desc = "Redo" })
+-- Misc
+map("i", "jk", "<Esc>", { desc = "Exit insert mode" })
+EOF
+    fi
 
     cat > ~/.config/nvim/lua/plugins/yazi.lua << 'EOF'
 return {

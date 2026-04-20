@@ -4,7 +4,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${HOME}/.claude"
 SETTINGS_FILE="${CLAUDE_DIR}/settings.json"
 
@@ -14,9 +13,55 @@ warn() { printf "[WARN] %s\n" "$1"; }
 setup_notify_script() {
   info "安装 notify.sh"
   mkdir -p "$CLAUDE_DIR"
-  cp "${SCRIPT_DIR}/notify.sh" "${CLAUDE_DIR}/notify.sh"
+  cat > "${CLAUDE_DIR}/notify.sh" << 'NOTIFY_EOF'
+#!/usr/bin/env bash
+# Cross-platform desktop notification.
+# Usage: notify.sh "Title" "Message"
+
+TITLE="${1:-Claude Code}"
+MESSAGE="${2:-通知}"
+
+escape_xml() {
+  echo "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'
+}
+
+notify_macos() {
+  local title_esc="${TITLE//\\/\\\\}"
+  title_esc="${title_esc//\"/\\\"}"
+  local msg_esc="${MESSAGE//\\/\\\\}"
+  msg_esc="${msg_esc//\"/\\\"}"
+  osascript -e "display notification \"${msg_esc}\" with title \"${title_esc}\""
+}
+
+notify_linux() {
+  notify-send "$TITLE" "$MESSAGE"
+}
+
+notify_wsl() {
+  local title_esc msg_esc
+  title_esc=$(escape_xml "$TITLE")
+  msg_esc=$(escape_xml "$MESSAGE")
+  powershell.exe -Command "
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+\$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+\$xml.LoadXml('<toast><visual><binding template=\"ToastText02\"><text id=\"1\">${title_esc}</text><text id=\"2\">${msg_esc}</text></binding></visual></toast>')
+[Windows.UI.Notifications.ToastNotification]::new(\$xml) | ForEach-Object { [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Claude Code').Show(\$_) }
+" 2>/dev/null
+}
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  notify_macos
+elif grep -qi microsoft /proc/version 2>/dev/null || [ -n "${WSL_DISTRO_NAME:-}" ]; then
+  notify_wsl
+elif command -v notify-send >/dev/null 2>&1; then
+  notify_linux
+else
+  printf '\a'
+fi
+NOTIFY_EOF
   chmod +x "${CLAUDE_DIR}/notify.sh"
-  info "  已复制到 ${CLAUDE_DIR}/notify.sh"
+  info "  已写入 ${CLAUDE_DIR}/notify.sh"
 }
 
 setup_hooks() {
@@ -25,7 +70,7 @@ setup_hooks() {
 
   # The hooks we want to ensure exist
   local stop_hook='{"type":"command","command":"~/.claude/notify.sh '\''Claude Code'\'' '\''任务已完成，等待您的输入'\'' 2>/dev/null || true","async":true}'
-  local notif_hook='{"type":"command","command":"MSG=$(python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('\''message'\'','\''需要您的注意'\''))\" 2>/dev/null); ~/.claude/notify.sh '\''Claude Code 需要您的输入'\'' \"${MSG:-需要您的注意}\" 2>/dev/null || true","async":true}'
+  local notif_hook='{"type":"command","command":"MSG=$(jq -r '\''.message // \"需要您的注意\"'\'' 2>/dev/null); ~/.claude/notify.sh '\''Claude Code 需要您的输入'\'' \"${MSG:-需要您的注意}\" 2>/dev/null || true","async":true}'
 
   if [ ! -f "$SETTINGS_FILE" ]; then
     # No existing settings — write fresh
@@ -54,26 +99,26 @@ EOF
 
   local tmp
   tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
 
-  # Add Stop hook if not already present
-  if ! jq -e '.hooks.Stop' "$SETTINGS_FILE" >/dev/null 2>&1; then
-    jq --argjson h "[{\"hooks\": [${stop_hook}]}]" \
-      '.hooks.Stop = $h' "$SETTINGS_FILE" > "$tmp" && mv "$tmp" "$SETTINGS_FILE"
-    info "  添加 Stop hook"
-  else
-    info "  Stop hook 已存在，跳过"
-  fi
+  jq_merge() {
+    local key="$1" val="$2"
+    if ! jq -e ".hooks.${key}" "$SETTINGS_FILE" >/dev/null 2>&1; then
+      if jq --argjson h "[{\"hooks\": [${val}]}]" \
+          ".hooks.${key} = \$h" "$SETTINGS_FILE" > "$tmp"; then
+        mv "$tmp" "$SETTINGS_FILE"
+        info "  添加 ${key} hook"
+      else
+        warn "  jq 写入 ${key} hook 失败，settings.json 未修改"
+      fi
+    else
+      info "  ${key} hook 已存在，跳过"
+    fi
+  }
 
-  # Add Notification hook if not already present
-  if ! jq -e '.hooks.Notification' "$SETTINGS_FILE" >/dev/null 2>&1; then
-    jq --argjson h "[{\"hooks\": [${notif_hook}]}]" \
-      '.hooks.Notification = $h' "$SETTINGS_FILE" > "$tmp" && mv "$tmp" "$SETTINGS_FILE"
-    info "  添加 Notification hook"
-  else
-    info "  Notification hook 已存在，跳过"
-  fi
+  jq_merge "Stop" "$stop_hook"
+  jq_merge "Notification" "$notif_hook"
 
-  rm -f "$tmp"
   info "  settings.json 更新完成"
 }
 

@@ -80,70 +80,35 @@
 
 # 安装脚本
 
-## 安装脚本功能说明
-- 脚本文件：`install.sh`
-- 自动检测运行环境：Windows、WSL/Linux、macOS
-- Windows 环境：安装“通用”软件和 Windows 专用软件
-- WSL 或原生 Linux：安装“终端方案”中的所有包与终端工具
-- macOS：安装“通用”软件、macOS 专用软件，以及“终端方案”里的所有包
-- 迁移 shell 环境变量：将 `bash` / `zsh` 中的 `export` 内容转换到 `fish` 配置中
-- 若无法直接安装，脚本会下载对应安装包到 `~/Downloads/installers`
+无需克隆仓库，直接用 curl 运行。两个脚本相互独立，按需选用。
 
-## 使用方法
-1. 下载或克隆仓库到本地：
-   ```bash
-   git clone <仓库地址>
-   cd AI-
-   ```
-2. 赋予执行权限并运行：
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-3. Windows 原生环境下，如果你使用 Git Bash 或 WSL，也可以同样执行：
-   ```bash
-   bash install.sh
-   ```
-4. 运行完成后，脚本会在终端输出安装结果和迁移状态。
+## init.sh — 终端环境一键安装
 
-# claude
+安装并配置完整终端方案：ghostty、fish、starship、zoxide、atuin、neovim（LazyVim）、lazygit、yazi 等。自动检测 macOS / Linux / Windows，写入对应平台的配置文件。
 
-## 1. 通过 hooks 配置桌面 Notification
-- 目标：完成或询问中途弹出通知
-- 实现方式：通过 shell / 应用 hooks 调用桌面通知命令
-- 示例：
-  - macOS: `osascript -e 'display notification "任务完成" with title "Claude"'`
-  - Linux: `notify-send "Claude" "任务完成"`
-  - Windows: 使用 PowerShell `New-BurntToastNotification` 或第三方通知工具
-- 说明：需要在任务流程或 API 调用完成时触发 hook，并将结果传给通知命令
-
-```
-// ~/.claude/settings.json
-"hooks: {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/notify.sh 'Claude Code' '任务已完成，等待您的输入' 2>/dev/null || true",
-            "async": true
-          }
-        ]
-      }
-    ],
-}
+```bash
+bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/init.sh)
 ```
 
-## 2. 配置 claude-hud
-- 安装插件：
-  - `/plugin marketplace add jarrodwatts/claude-hud`
-  - `/plugin install claude-hud`
-- 初始化：
-  - `/claude-hud:setup`
-- 备注：
-  - 该插件用于增强 Claude HUD 交互体验
-  - 需要确认是否已安装相应的插件管理器和环境
-  - 如果需要 hook 通知，可在 HUD 配置中添加自定义命令调用桌面通知插件
+运行完成后执行 `exec fish` 或重启终端切换到 fish shell。
+
+## setup_claude.sh — Claude Code 配置
+
+写入 `~/.claude/notify.sh`（跨平台桌面通知脚本），并向 `~/.claude/settings.json` 注入两个 hooks：
+- **Stop hook**：Claude 停止等待输入时弹出”任务已完成”通知
+- **Notification hook**：Claude 发出通知事件时弹出对应消息
+
+```bash
+bash <(curl -sSfL https://raw.githubusercontent.com/CatcherInSky/MyWorkingEnvironment/main/setup_claude.sh)
+```
+
+运行完成后，在 Claude Code 会话中手动安装 claude-hud 插件：
+
+```
+/plugin marketplace add jarrodwatts/claude-hud
+/plugin install claude-hud
+/claude-hud:setup
+```
 
 # 设计 (暂不考虑)
 - pencil? snitich? figma?
